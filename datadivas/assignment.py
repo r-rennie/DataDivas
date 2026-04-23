@@ -8,6 +8,7 @@ It includes input parsing, validation, and report generation.
 from collections import deque
 from typing import Dict, List, Optional
 import difflib
+from ortools.sat.python import cp_model
 
 class AssignmentError(ValueError):
     pass
@@ -131,10 +132,9 @@ def assign_students_to_projects(
     student_rankings: Dict[str, List[str]],
     project_capacities: Dict[str, int],
 ) -> Dict[str, Optional[str]]:
-    """Assign students to projects based on ranked preferences.
+    """Assign students to projects using CP-SAT to minimize total student unhappiness.
 
-    This uses a proposal-based assignment model that respects project capacity
-    limits while attempting to honor students' highest-ranked projects.
+    Minimizes the sum of squares of ranks received by students.
     """
     if not student_rankings:
         raise AssignmentError("Student rankings are required.")
@@ -152,83 +152,83 @@ def assign_students_to_projects(
             "Unrecognized projects in student rankings: " + ", ".join(sorted(invalid_projects))
         )
 
-    # Sort projects for consistent ordering in comparisons
-    all_projects = sorted(project_capacities.keys())
+    # Create CP-SAT model
+    model = cp_model.CpModel()
 
-    # Record how each student ranks each project so we can compare preferences.
-    # This is used later to determine which students are the best fit for each project.
-    preference_rank = {
-        student: {project: idx for idx, project in enumerate(ranking)}
-        for student, ranking in student_rankings.items()
-    }
+    students = list(student_rankings.keys())
+    projects = list(project_capacities.keys())
 
-    # Extend each student's ranking so every candidate project is considered.
-    # This ensures students can still be placed even when their top choices fill up.
-    extended_rankings: Dict[str, List[str]] = {}
-    for student, ranking in student_rankings.items():
-        ordered = [project for project in ranking if project in project_capacities]
-        ordered += [project for project in all_projects if project not in ordered]
-        extended_rankings[student] = ordered
+    # Decision variables: x[s][p] = 1 if student s assigned to project p
+    x = {}
+    for s in students:
+        for p in projects:
+            x[s, p] = model.NewBoolVar(f'x_{s}_{p}')
 
-    proposals: Dict[str, int] = {student: 0 for student in student_rankings}
-    project_assignments: Dict[str, List[str]] = {project: [] for project in project_capacities}
-    free_students = deque(student_rankings.keys())
+    # Unassigned variables: u[s] = 1 if student s is unassigned
+    u = {s: model.NewBoolVar(f'u_{s}') for s in students}
 
-    def project_value(student: str, project: str) -> int:
-        """Calculate how much a student values a project.
-        
-        Lower values indicate higher preference. Students not ranking a project
-        receive the lowest value (least preferred).
-        """
-        return preference_rank[student].get(project, len(all_projects))
+    # Active variables: a[p] = 1 if project p is active
+    a = {p: model.NewBoolVar(f'a_{p}') for p in projects}
 
-    # Use a proposal loop similar to Gale-Shapley stable matching.
-    # Each student proposes to their next available project until placed or out of options.
-    # This ensures projects are filled with students who prefer them most.
-    while free_students:
-        student = free_students.popleft()
-        if proposals[student] >= len(extended_rankings[student]):
-            continue
-        project = extended_rankings[student][proposals[student]]
-        proposals[student] += 1
-        project_assignments[project].append(student)
+    # Define costs: cost[s][p] = N^2 where N is the 1-based choice number (1-6),
+    # or 1000 if the project is not in the student's top 6 choices
+    costs = {}
+    for s in students:
+        ranking = student_rankings[s]
+        for idx, proj in enumerate(ranking):
+            # 1-based indexing: 1st choice = 1, 2nd choice = 2, etc.
+            choice_number = idx + 1
+            costs[s, proj] = choice_number ** 2
+        # For projects not in the student's ranking, use penalty cost
+        for p in projects:
+            if (s, p) not in costs:
+                costs[s, p] = 1000
 
-        # If a project exceeds capacity, remove the student who values it least
-        if len(project_assignments[project]) > project_capacities[project]:
-            # Find the student with the lowest preference for this project
-            worst_student = max(
-                project_assignments[project],
-                key=lambda name: (project_value(name, project), name),
-            )
-            project_assignments[project].remove(worst_student)
-            # Make the displaced student free to try another project
-            if worst_student != student:
-                free_students.append(worst_student)
-            if proposals[worst_student] < len(extended_rankings[worst_student]):
-                free_students.append(worst_student)
+    # Objective: minimize sum of squares of choice numbers + penalty for unassigned
+    objective_terms = []
+    unassigned_penalty = 1000  # penalty for leaving a student unassigned
+    for s in students:
+        for p in projects:
+            unhappiness = costs[s, p]
+            objective_terms.append(x[s, p] * unhappiness)
+    for s in students:
+        objective_terms.append(u[s] * unassigned_penalty)
+    model.Minimize(sum(objective_terms))
 
-        if student in project_assignments[project] and len(project_assignments[project]) <= project_capacities[project]:
-            continue
+    # Constraints
+    # Each student assigned to at most one project (allow unassigned)
+    for s in students:
+        assigned_count = sum(x[s, p] for p in projects)
+        model.Add(assigned_count + u[s] == 1)
+        model.Add(assigned_count <= 1)
 
-    # Final validation: enforce minimum team size of 4 students per project only for projects with capacity >= 4.
-    # If a project has capacity >= 4 but fewer than 4 students, redistribute them to other projects.
-    for project, assigned_students in list(project_assignments.items()):
-        if project_capacities[project] >= 4 and 0 < len(assigned_students) < 4:
-            for student in list(assigned_students):
-                project_assignments[project].remove(student)
-                current_index = extended_rankings[student].index(project)
-                for next_project in extended_rankings[student][current_index + 1 :]:
-                    if len(project_assignments[next_project]) < project_capacities[next_project]:
-                        project_assignments[next_project].append(student)
-                        break
+    # Semicontinuous capacity constraints
+    for p in projects:
+        cap = project_capacities[p]
+        student_count = sum(x[s, p] for s in students)
+        # If not active, 0 students
+        model.Add(student_count == 0).OnlyEnforceIf(a[p].Not())
+        # If active, between cap-1 and cap students
+        model.Add(student_count >= cap - 1).OnlyEnforceIf(a[p])
+        model.Add(student_count <= cap).OnlyEnforceIf(a[p])
 
-    return {
-        student: next(
-            (project for project, assigned in project_assignments.items() if student in assigned),
-            None,
-        )
-        for student in student_rankings
-    }
+    # Solve the model
+    solver = cp_model.CpSolver()
+    status = solver.Solve(model)
+
+    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        assignments = {}
+        for s in students:
+            for p in projects:
+                if solver.Value(x[s, p]) == 1:
+                    assignments[s] = p
+                    break
+            else:
+                assignments[s] = None
+        return assignments
+    else:
+        # Infeasible, assign None to all
+        return {s: None for s in students}
 
 
 def build_report(assignments: Dict[str, Optional[str]]) -> str:
