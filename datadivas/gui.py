@@ -103,28 +103,29 @@ class CapstoneMapperApp:
         
         # Configure main window
         master.title("Capstone Placement App")
-        # Set the window to fullscreen mode
+        master.geometry("1000x700")
         master.state('zoomed')
+        master.minsize(800, 600)
         master.configure(bg=self.themes[self.current_theme]["bg"])
 
         header = tk.Label(
             master,
             text="Capstone Placement App",
-            font=("Segoe UI", 20, "bold"),
+            font=("Segoe UI", 24, "bold"),
             bg=self.themes[self.current_theme]["bg"],
             fg=self.themes[self.current_theme]["text"],
         )
-        header.pack(padx=16, pady=(12, 6))
+        header.pack(padx=16, pady=(10, 4))
         self.ui_elements["header"] = header
 
         subtitle = tk.Label(
             master,
             text="Use ranked student preferences and project capacities to generate team placement suggestions.",
-            font=("Segoe UI", 10),
+            font=("Segoe UI", 12),
             bg=self.themes[self.current_theme]["bg"],
             fg=self.themes[self.current_theme]["subtitle_fg"],
         )
-        subtitle.pack(padx=16, pady=(0, 16))
+        subtitle.pack(padx=16, pady=(0, 12))
         self.ui_elements["subtitle"] = subtitle
 
         # Create a canvas with scrollbars for the main content
@@ -175,10 +176,10 @@ class CapstoneMapperApp:
         right.grid(row=0, column=1, sticky="nsew", pady=2)
         self.ui_elements["right_frame"] = right
 
-        # Configure frame grid weights for equal column distribution
+        # Configure frame grid weights for 40/60 column distribution
         frame.grid_rowconfigure(0, weight=1)
-        frame.grid_columnconfigure(0, weight=1)
-        frame.grid_columnconfigure(1, weight=1)
+        frame.grid_columnconfigure(0, weight=4)
+        frame.grid_columnconfigure(1, weight=6)
 
         self._build_input_panel(left)
         self._build_output_panel(right)
@@ -214,11 +215,11 @@ class CapstoneMapperApp:
         label = tk.Label(
             container,
             text="Project Capacities",
-            font=("Segoe UI", 12, "bold"),
+            font=("Segoe UI", 14, "bold"),
             bg=self.themes[self.current_theme]["panel"],
             fg=self.themes[self.current_theme]["accent"],
         )
-        label.grid(row=0, column=0, sticky="w", padx=12, pady=(12, 6))
+        label.grid(row=0, column=0, sticky="w", padx=12, pady=(8, 4))
         self.ui_elements["projects_label"] = label
 
         # Row 1: Projects text box
@@ -227,10 +228,11 @@ class CapstoneMapperApp:
             wrap="word",
             bg=self.themes[self.current_theme]["input_bg"],
             fg=self.themes[self.current_theme]["input_fg"],
-            font=("Segoe UI", 10),
+            font=("Segoe UI", 12),
             relief="flat",
             padx=8,
             pady=8,
+            height=6,
         )
         self.projects_text.grid(row=1, column=0, sticky="nsew", padx=12, pady=6)
         self.projects_text.insert("1.0", SAMPLE_PROJECTS)
@@ -238,7 +240,7 @@ class CapstoneMapperApp:
 
         # Row 2: Project import button
         loader_frame = tk.Frame(container, bg=self.themes[self.current_theme]["panel"])
-        loader_frame.grid(row=2, column=0, sticky="w", padx=12, pady=(0, 8))
+        loader_frame.grid(row=2, column=0, sticky="w", padx=12, pady=(0, 10))
         self.ui_elements["loader_frame"] = loader_frame
 
         project_import_button = tk.Button(
@@ -258,11 +260,11 @@ class CapstoneMapperApp:
         students_label = tk.Label(
             container,
             text="Student Rankings",
-            font=("Segoe UI", 12, "bold"),
+            font=("Segoe UI", 14, "bold"),
             bg=self.themes[self.current_theme]["panel"],
             fg=self.themes[self.current_theme]["accent"],
         )
-        students_label.grid(row=3, column=0, sticky="w", padx=12, pady=(12, 6))
+        students_label.grid(row=3, column=0, sticky="w", padx=12, pady=(8, 4))
         self.ui_elements["students_label"] = students_label
 
         # Row 4: Students text box
@@ -271,10 +273,11 @@ class CapstoneMapperApp:
             wrap="word",
             bg=self.themes[self.current_theme]["input_bg"],
             fg=self.themes[self.current_theme]["input_fg"],
-            font=("Segoe UI", 10),
+            font=("Segoe UI", 12),
             relief="flat",
             padx=8,
             pady=8,
+            height=8,
         )
         self.students_text.grid(row=4, column=0, sticky="nsew", padx=12, pady=6)
         self.students_text.insert("1.0", SAMPLE_STUDENTS)
@@ -282,7 +285,7 @@ class CapstoneMapperApp:
 
         # Row 5: Student import button
         student_import_frame = tk.Frame(container, bg=self.themes[self.current_theme]["panel"])
-        student_import_frame.grid(row=5, column=0, sticky="w", padx=12, pady=(0, 8))
+        student_import_frame.grid(row=5, column=0, sticky="w", padx=12, pady=(0, 10))
         self.ui_elements["student_import_frame"] = student_import_frame
 
         student_import_button = tk.Button(
@@ -300,7 +303,7 @@ class CapstoneMapperApp:
 
         # Row 6: Buttons
         button_frame = tk.Frame(container, bg=self.themes[self.current_theme]["panel"])
-        button_frame.grid(row=6, column=0, sticky="ew", padx=12, pady=14)
+        button_frame.grid(row=6, column=0, sticky="ew", padx=12, pady=10)
         self.ui_elements["button_frame"] = button_frame
 
         assign_button = tk.Button(
@@ -311,7 +314,7 @@ class CapstoneMapperApp:
             fg=self.themes[self.current_theme]["text"],
             relief="flat",
             padx=10,
-            pady=8,
+            pady=4,
         )
         assign_button.pack(side="left", padx=(0, 8))
         self.ui_elements["assign_button"] = assign_button
@@ -324,7 +327,7 @@ class CapstoneMapperApp:
             fg=self.themes[self.current_theme]["text"],
             relief="flat",
             padx=10,
-            pady=8,
+            pady=4,
         )
         clear_button.pack(side="left", padx=(0, 8))
         self.ui_elements["clear_button"] = clear_button
@@ -337,7 +340,7 @@ class CapstoneMapperApp:
             fg=self.themes[self.current_theme]["text"],
             relief="flat",
             padx=10,
-            pady=8,
+            pady=4,
         )
         save_button.pack(side="left")
         self.ui_elements["save_button"] = save_button
@@ -350,7 +353,7 @@ class CapstoneMapperApp:
             fg=self.themes[self.current_theme]["text"],
             relief="flat",
             padx=10,
-            pady=8,
+            pady=4,
         )
         theme_button.pack(side="left", padx=(8, 0))
         self.ui_elements["theme_button"] = theme_button
@@ -378,11 +381,11 @@ class CapstoneMapperApp:
         label = tk.Label(
             container,
             text="Assignment Results",
-            font=("Segoe UI", 12, "bold"),
+            font=("Segoe UI", 14, "bold"),
             bg=self.themes[self.current_theme]["panel"],
             fg=self.themes[self.current_theme]["accent"],
         )
-        label.grid(row=0, column=0, sticky="w", padx=12, pady=(12, 6))
+        label.grid(row=0, column=0, sticky="w", padx=12, pady=(8, 4))
         self.ui_elements["output_label"] = label
 
         self.output_text = scrolledtext.ScrolledText(
@@ -390,10 +393,11 @@ class CapstoneMapperApp:
             wrap="word",
             bg=self.themes[self.current_theme]["output_bg"],
             fg=self.themes[self.current_theme]["text"],
-            font=("Segoe UI", 10),
+            font=("Segoe UI", 12),
             relief="flat",
             padx=8,
             pady=8,
+            height=20,
             state="disabled",
         )
         self.output_text.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
@@ -520,9 +524,9 @@ class CapstoneMapperApp:
             self.last_students = students
             assignments = assign_students_to_projects(students, projects)
             self.last_assignments = assignments
-            quality = calculate_match_quality(assignments, students)
+            stats = calculate_match_quality(assignments, students)
             report = build_report(assignments)
-            self.set_output(quality + "\n\n" + report)
+            self.set_output(report + "\n\n" + stats)
         except AssignmentError as error:
             messagebox.showerror("Input Error", str(error))
         except Exception as error:
