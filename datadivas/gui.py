@@ -6,17 +6,17 @@ from .assignment import AssignmentError, assign_students_to_projects, build_repo
 
 # Sample data for demonstration purposes. Shows the expected format for
 # project capacities and student rankings.
-SAMPLE_PROJECTS = """Project Apollo,4
-Project Atlas,4
-Project Beacon,5
-Project Cypress,4
+SAMPLE_PROJECTS = """Project Apollo,4,CS,CpE,EE
+Project Atlas,4,CS,EE
+Project Beacon,5,CS,CpE
+Project Cypress,4,CpE,EE
 """
 
-# Sample student data showing ranking format: "Student Name: Project 1, Project 2, ..."
-SAMPLE_STUDENTS = """Alice: Project Apollo, Project Atlas, Project Beacon
-Ben: Project Atlas, Project Cypress, Project Apollo
-Carmen: Project Beacon, Project Apollo, Project Atlas
-Diana: Project Cypress, Project Atlas, Project Apollo
+# Sample student data showing ranking format: "Student Name (major): Project 1, Project 2, ..."
+SAMPLE_STUDENTS = """Alice (CS): Project Apollo, Project Atlas, Project Beacon
+Ben (CpE): Project Atlas, Project Cypress, Project Apollo
+Carmen (EE): Project Beacon, Project Apollo, Project Atlas
+Diana (CpE): Project Cypress, Project Atlas, Project Apollo
 """
 
 
@@ -59,9 +59,9 @@ class CapstoneMapperApp:
         """
         self.master = master
         # Store last assignment results for CSV export
-        self.last_assignments: dict[str, str | None] = {}
-        # Store parsed student rankings for reference when building export
-        self.last_students: dict[str, list[str]] = {}
+        self.last_result: dict = {}
+        # Store parsed student data for reference when building export
+        self.last_students: dict[str, dict] = {}
         
         # Define color schemes for dark and light themes
         self.themes = {
@@ -456,7 +456,7 @@ class CapstoneMapperApp:
     def load_projects_csv(self) -> None:
         """Load project data from a CSV file.
         
-        Opens a file dialog, reads project and capacity columns, and populates
+        Opens a file dialog, reads project, capacity, and allowed majors columns, and populates
         the projects text area. Handles header detection and formatting.
         """
         try:
@@ -466,16 +466,21 @@ class CapstoneMapperApp:
             field_names = rows[0].keys()
             project_key = _choose_header_key(field_names, ["project", "project name", "name"])
             capacity_key = _choose_header_key(field_names, ["capacity", "group size", "size"])
+            majors_key = _choose_header_key(field_names, ["allowed majors", "majors", "allowed_majors"])
             if not project_key or not capacity_key:
-                raise AssignmentError("Projects CSV requires headers like 'Project' and 'Capacity'.")
+                raise AssignmentError("Projects CSV requires headers like 'Project', 'Capacity', and 'Allowed Majors'.")
 
             lines = []
             for row in rows:
                 project = row.get(project_key, "").strip()
                 capacity = row.get(capacity_key, "").strip()
+                majors = row.get(majors_key, "").strip() if majors_key else ""
                 if not project:
                     continue
-                lines.append(f"{project},{capacity}")
+                if majors:
+                    lines.append(f"{project},{capacity},{majors}")
+                else:
+                    lines.append(f"{project},{capacity}")
             self.projects_text.delete("1.0", tk.END)
             self.projects_text.insert("1.0", "\n".join(lines))
         except AssignmentError as error:
@@ -484,7 +489,7 @@ class CapstoneMapperApp:
     def load_students_csv(self) -> None:
         """Load student data from a CSV file.
         
-        Opens a file dialog, reads student names and ranking columns, and populates
+        Opens a file dialog, reads student names, majors, and ranking columns, and populates
         the students text area. Handles header detection and formatting.
         """
         try:
@@ -493,16 +498,20 @@ class CapstoneMapperApp:
                 return
             field_names = rows[0].keys()
             student_key = _choose_header_key(field_names, ["student", "student name", "name"])
+            major_key = _choose_header_key(field_names, ["major"])
             ranking_key = _choose_header_key(field_names, ["rankings", "preferences", "choices"])
             if not student_key or not ranking_key:
-                raise AssignmentError("Students CSV requires headers like 'Student' and 'Rankings'.")
+                raise AssignmentError("Students CSV requires headers like 'Student', 'Major', and 'Rankings'.")
 
             lines = []
             for row in rows:
                 student = row.get(student_key, "").strip()
+                major = row.get(major_key, "").strip() if major_key else ""
                 ranking = row.get(ranking_key, "").strip()
                 if not student:
                     continue
+                if major:
+                    student = f"{student} ({major})"
                 lines.append(f"{student}: {ranking}")
             self.students_text.delete("1.0", tk.END)
             self.students_text.insert("1.0", "\n".join(lines))
@@ -522,10 +531,10 @@ class CapstoneMapperApp:
             projects = parse_projects(project_text)
             students = parse_student_rankings(student_text)
             self.last_students = students
-            assignments = assign_students_to_projects(students, projects)
-            self.last_assignments = assignments
-            stats = calculate_match_quality(assignments, students)
-            report = build_report(assignments)
+            result = assign_students_to_projects(students, projects)
+            self.last_result = result
+            stats = calculate_match_quality(result, students)
+            report = build_report(result)
             self.set_output(report + "\n\n" + stats)
         except AssignmentError as error:
             messagebox.showerror("Input Error", str(error))
@@ -541,7 +550,7 @@ class CapstoneMapperApp:
         
         Shows a warning if no assignments have been run yet.
         """
-        if not self.last_assignments:
+        if not self.last_result:
             messagebox.showwarning("No Output", "Run the assignment before saving a CSV file.")
             return
         path = filedialog.asksaveasfilename(
@@ -554,11 +563,14 @@ class CapstoneMapperApp:
         try:
             with open(path, "w", newline="", encoding="utf-8") as csvfile:
                 writer = csv.writer(csvfile)
-                writer.writerow(["Student", "Assigned Project", "Rank Assigned"])
-                for student in sorted(self.last_assignments.keys()):
-                    project = self.last_assignments[student]
-                    rank = get_rank(project, self.last_students[student])
-                    writer.writerow([student, project or "Unassigned", rank])
+                writer.writerow(["Student", "Major", "Assigned Project", "Rank Assigned"])
+                assignments = self.last_result['assignments']
+                student_majors = self.last_result['student_majors']
+                for student in sorted(assignments.keys()):
+                    project = assignments[student]
+                    major = student_majors[student]
+                    rank = get_rank(project, self.last_students[student]['rankings'])
+                    writer.writerow([student, major, project or "Unassigned", rank])
             messagebox.showinfo("Saved", f"Assignment results saved to {path}")
         except OSError as error:
             messagebox.showerror("Save Error", str(error))

@@ -18,33 +18,44 @@ from datadivas.assignment import (
 class AssignmentTests(unittest.TestCase):
     """Test suite for assignment logic and input validation."""
     def test_parse_projects_valid(self):
-        """Test parsing valid project definitions with capacities 4-6."""
-        text = "Project A,4\nProject B,5"
+        """Test parsing valid project definitions with capacities 4-6 and majors."""
+        text = "Project A,4,CS,CpE\nProject B,5,EE"
         result = parse_projects(text)
-        self.assertEqual(result, {"Project A": 4, "Project B": 5})
+        expected = {
+            "Project A": {"capacity": 4, "allowed_majors": ["CS", "CpE"]},
+            "Project B": {"capacity": 5, "allowed_majors": ["EE"]}
+        }
+        self.assertEqual(result, expected)
 
     def test_parse_projects_invalid_capacity(self):
         """Test that capacities outside 4-6 range raise an error."""
-        text = "Project A,3\nProject B,7"
+        text = "Project A,3,CS\nProject B,7,EE"
         with self.assertRaises(AssignmentError):
             parse_projects(text)
 
     def test_parse_students_valid(self):
-        """Test parsing valid student rankings with correct format."""
-        text = "Alice: Project A, Project B\nBob: Project B"
+        """Test parsing valid student rankings with majors."""
+        text = "Alice (CS): Project A, Project B\nBob (CpE): Project B"
         result = parse_student_rankings(text)
-        self.assertEqual(result["Alice"], ["Project A", "Project B"])
-        self.assertEqual(result["Bob"], ["Project B"])
+        expected = {
+            "Alice": {"rankings": ["Project A", "Project B"], "major": "CS"},
+            "Bob": {"rankings": ["Project B"], "major": "CpE"}
+        }
+        self.assertEqual(result, expected)
 
     def test_assign_students_to_projects_prefers_top_choices(self):
         """Test that the algorithm prioritizes students' top preferences when possible."""
         students = {
-            "Alice": ["Project X", "Project Y"],
-            "Bob": ["Project X", "Project Y"],
-            "Carmen": ["Project Y", "Project X"],
+            "Alice": {"rankings": ["Project X", "Project Y"], "major": "CS"},
+            "Bob": {"rankings": ["Project X", "Project Y"], "major": "CS"},
+            "Carmen": {"rankings": ["Project Y", "Project X"], "major": "EE"},
         }
-        projects = {"Project X": 1, "Project Y": 2}
-        assignments = assign_students_to_projects(students, projects)
+        projects = {
+            "Project X": {"capacity": 4, "allowed_majors": ["CS", "EE"]},
+            "Project Y": {"capacity": 4, "allowed_majors": ["CS", "EE"]}
+        }
+        result = assign_students_to_projects(students, projects)
+        assignments = result['assignments']
         self.assertEqual(assignments["Alice"], "Project X")
         self.assertEqual(assignments["Bob"], "Project Y")
         self.assertEqual(assignments["Carmen"], "Project Y")
