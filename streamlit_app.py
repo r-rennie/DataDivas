@@ -170,21 +170,29 @@ def main():
     with st.sidebar:
         st.header("Instructions")
         st.markdown("""
-        **Project Format:**
+        1. **Define the Projects**
         ```
         Project Name,Capacity,Major1,Major2,...
         ```
         Example: `Project Apollo,4,CS,CpE,EE`
         
-        **Student Format:**
+        2. **Input Student Rankings**
         ```
         Student Name (Major): Project1, Project2, ...
         ```
-        Example: `Alice (CS): Project Apollo, Project Atlas`
+        Example: `Alice (CS): Project Apollo, Project Atlas, ...`
         
-        **Constraints:**
+        *Note: Project names must exactly match the list from Step 1.*
+                    
+        3. **Run the Assignment:**
+        
+        Click the "Run Assignment" button to generate placements based on the provided data.
+        
+        **Constraints**
         - Capacity: 4-6 students per project
         - Majors: CS, CpE, or EE
+        - Each student can only be assigned to one project
+        - Each project can only have students from its allowed majors
         """)
     
     # Create two columns for input
