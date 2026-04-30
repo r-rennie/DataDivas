@@ -271,7 +271,7 @@ def main():
     
     with col2:
         st.subheader("👥 Student Rankings")
-        st.markdown("*Note: The csv file must contain the headers Student, Major, and Rankings*")
+        st.markdown("*Note: The csv file must contain the headers Student, Major, and Ranking 1, Ranking 2, ...*")
 
         # File uploader for students
         students_file = st.file_uploader(
@@ -302,7 +302,7 @@ def main():
     col1, col2, col3 = st.columns([2, 2, 2])
     
     with col1:
-        if st.button("🚀 Run Assignment", use_container_width=True, key="run_button"):
+        if st.button("🏃 Run Assignment", use_container_width=True, key="run_button"):
             try:
                 # Parse input
                 projects = parse_projects(projects_input)
