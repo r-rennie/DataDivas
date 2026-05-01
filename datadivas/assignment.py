@@ -57,6 +57,15 @@ def parse_projects(project_text: str) -> Dict[str, Dict]:
 
     Group sizes are constrained to the allowed range so the ECCS chair can
     plan teams with 4-6 students. Allowed majors are 'CS', 'CpE', 'EE'.
+    
+    Args:
+        project_text: Multi-line string containing project definitions.
+        
+    Returns:
+        Dictionary mapping project names to their data (capacity and allowed majors).
+        
+    Raises:
+        AssignmentError: If project format is invalid or constraints not met.
     """
     projects: Dict[str, Dict] = {}
     for line in project_text.splitlines():
@@ -92,7 +101,23 @@ def parse_projects(project_text: str) -> Dict[str, Dict]:
 
 
 def parse_student_rankings(student_text: str) -> Dict[str, Dict]:
-    """Parse student rankings in order of preference with majors."""
+    """Parse student rankings in order of preference with majors.
+    
+    The expected format is:
+        Student Name (major): project1, project2, ...
+    
+    Students rank projects in order of preference, and their major is specified
+    in parentheses. Majors must be 'CS', 'CpE', or 'EE'.
+    
+    Args:
+        student_text: Multi-line string containing student ranking definitions.
+        
+    Returns:
+        Dictionary mapping student names to their data (rankings list and major).
+        
+    Raises:
+        AssignmentError: If student format is invalid or constraints not met.
+    """
     students: Dict[str, Dict] = {}
     for line in student_text.splitlines():
         if not line.strip():
@@ -150,7 +175,26 @@ def assign_students_to_projects(
     student_data: Dict[str, Dict],
     project_data: Dict[str, Dict],
 ) -> Dict[str, Dict]:
-    """Assign students to projects using CP-SAT to minimize unhappiness and diversity penalties."""
+    """Assign students to projects using CP-SAT to minimize unhappiness and diversity penalties.
+    
+    This function implements a constraint programming model that assigns students
+    to projects while respecting capacity constraints, major eligibility, and
+    attempting to maximize student satisfaction while promoting team diversity.
+    
+    Args:
+        student_data: Dictionary mapping student names to their data (rankings and major).
+        project_data: Dictionary mapping project names to their data (capacity and allowed majors).
+        
+    Returns:
+        Dictionary containing assignment results with keys:
+        - 'assignments': Student to project mapping (None if unassigned)
+        - 'student_majors': Student to major mapping
+        - 'project_compositions': Project to major composition mapping
+        - 'project_interest': Project to interest count mapping
+        
+    Raises:
+        AssignmentError: If input validation fails.
+    """
     if not student_data:
         raise AssignmentError("Student data is required.")
     if not project_data:
@@ -193,6 +237,9 @@ def assign_students_to_projects(
         assigned_count = sum(x[s, p] for p in projects)
         model.Add(assigned_count + u[s] == 1)
 
+    # The Nixing Rule ensures projects are either inactive (0 students) or active
+    # with between 4 and their specified capacity (4-6) students. This prevents
+    # partial teams that are too small to be viable.
     for p in projects:
         cap = project_data[p]['capacity']
         student_count = sum(x[s, p] for s in students)
@@ -208,6 +255,10 @@ def assign_students_to_projects(
                 model.Add(x[s, p] == 0)
 
     # 4. Soft Balance (Diversity & Monoculture Penalties)
+    # The Diversity Penalty encourages teams to include students from all allowed majors
+    # for the project. A penalty is applied if an allowed major is missing from the team.
+    # Additionally, a large monoculture penalty discourages teams consisting of only
+    # one major when multiple majors are allowed, promoting interdisciplinary collaboration.
     diversity_penalties = []
     missing_major_penalty = 150 
     monoculture_penalty = 5000 
@@ -243,6 +294,11 @@ def assign_students_to_projects(
             diversity_penalties.append(actual_mono_penalty * monoculture_penalty)
 
     # 5. Objective costs
+    # The Objective Function minimizes the total cost, which balances student unhappiness
+    # (based on how far down their preference list the assigned project is) against
+    # diversity penalties. Unhappiness increases quadratically with choice number,
+    # heavily penalizing assignments far from top preferences, while diversity penalties
+    # encourage balanced teams. Unassigned students receive a high penalty.
     objective_terms = []
     for s in students:
         ranking = student_data[s]['rankings']

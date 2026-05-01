@@ -100,22 +100,64 @@ def parse_csv_file(uploaded_file, file_type: str) -> str:
             student_col = find_column(candidates_project)
             major_col = find_column(candidates_capacity)
             rankings_col = find_column(candidates_majors)
-            
-            if not student_col or not rankings_col:
-                raise AssignmentError("Students CSV requires 'Student', 'Major', and 'Rankings' columns.")
-            
+
+            if not student_col:
+                raise AssignmentError("Students CSV requires a 'Student' or 'Full Name' column.")
+
+            # Determine ranking sources: prefer multiple separate ranking columns like
+            # Choice 1, Rank 1, Project 1, but also support a single combined Rankings column.
+            combined_ranking_column = rankings_col if rankings_col and rankings_col not in {student_col, major_col} else None
+            ranking_candidates = [
+                col for col in df.columns
+                if col not in {student_col, major_col}
+                and any(pattern in col.lower() for pattern in ["choice", "rank", "project", "preference"])
+            ]
+
+            if ranking_candidates and not (
+                len(ranking_candidates) == 1
+                and combined_ranking_column
+                and ranking_candidates[0].lower() == combined_ranking_column.lower()
+            ):
+                ranking_columns = ranking_candidates[:6]
+                use_combined_rankings = False
+            elif combined_ranking_column:
+                ranking_columns = [combined_ranking_column]
+                use_combined_rankings = True
+            else:
+                raise AssignmentError(
+                    "Students CSV requires 'Student', 'Major', and one or more ranking columns like Choice, Rank, or Project."
+                )
+
             lines = []
             for _, row in df.iterrows():
                 student = str(row[student_col]).strip()
                 major = str(row[major_col]).strip() if major_col else ""
-                rankings = str(row[rankings_col]).strip()
-                
+                rankings = []
+
+                if use_combined_rankings:
+                    raw_rankings = row[rankings_col]
+                    if pd.isna(raw_rankings):
+                        raw_rankings = ""
+                    for project in str(raw_rankings).split(","):
+                        project_name = project.strip()
+                        if project_name and project_name.lower() != "nan":
+                            rankings.append(project_name)
+                else:
+                    for col in ranking_columns[:6]:
+                        raw_value = row[col]
+                        if pd.isna(raw_value):
+                            continue
+                        project_name = str(raw_value).strip()
+                        if project_name and project_name.lower() != "nan":
+                            rankings.append(project_name)
+
                 if student:
+                    ranking_text = ", ".join(rankings)
                     if major:
-                        lines.append(f"{student} ({major}): {rankings}")
+                        lines.append(f"{student} ({major}): {ranking_text}")
                     else:
-                        lines.append(f"{student}: {rankings}")
-            
+                        lines.append(f"{student}: {ranking_text}")
+
             return "\n".join(lines)
     
     except Exception as e:
@@ -200,6 +242,7 @@ def main():
     
     with col1:
         st.subheader("📋 Project Capacities")
+        st.markdown("*Note: The csv file must contain the headers Project, Capacity, and Majors*")
         
         # File uploader for projects
         projects_file = st.file_uploader(
@@ -228,7 +271,8 @@ def main():
     
     with col2:
         st.subheader("👥 Student Rankings")
-        
+        st.markdown("*Note: The csv file must contain the headers Student, Major, and Ranking 1, Ranking 2, ...*")
+
         # File uploader for students
         students_file = st.file_uploader(
             "Upload Students CSV",
@@ -258,7 +302,7 @@ def main():
     col1, col2, col3 = st.columns([2, 2, 2])
     
     with col1:
-        if st.button("🚀 Run Assignment", use_container_width=True, key="run_button"):
+        if st.button("🏃 Run Assignment", use_container_width=True, key="run_button"):
             try:
                 # Parse input
                 projects = parse_projects(projects_input)
